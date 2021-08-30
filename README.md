@@ -47,6 +47,8 @@ This will generate a comment like this on PRs:
 >
 > </details>
 
+This is heavily inspired and partially lifted from [ember-asset-size-action](https://github.com/simplabs/ember-asset-size-action).
+
 ## Usage
 
 Create a file named `.github/workflows/asset-sizes.yml` in your repo and add the following:
