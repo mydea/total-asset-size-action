@@ -40,15 +40,15 @@ module.exports = async function run() {
 const prettyBytes = __nccwpck_require__(5168);
 
 function markdownTable(data) {
-  let table = `File(s) | Gzipped | Raw | Gzipped +/-
+  let table = `File(s) | Gzipped | +/- | Raw
 --- | --- | --- | ---`;
 
   data.forEach((record) => {
     table += `\n${[
       record.filePattern,
       prettyBytes(record.gzip),
-      prettyBytes(record.raw),
       prettyBytes(record.gzipDiff, { signed: true }),
+      prettyBytes(record.raw),
     ].join(' | ')}`;
   });
 
@@ -113,6 +113,8 @@ module.exports = function buildOutputText(prAssets, mainAssets) {
 
     outputParts.push(markdownTable([diff]));
     outputParts.push(markdownDetails(markdownTable(diff.filesDiff)));
+    outputParts.push('');
+    outputParts.push('---');
     outputParts.push('');
   });
 
