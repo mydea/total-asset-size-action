@@ -7,16 +7,12 @@
 const { getInput } = __nccwpck_require__(2186);
 const { exec } = __nccwpck_require__(1514);
 const { getOctokit, context } = __nccwpck_require__(5438);
-const { sync: glob } = __nccwpck_require__(1957);
 const getPullRequest = __nccwpck_require__(6405);
-const getGzipSize = __nccwpck_require__(9938);
-const fs = __nccwpck_require__(5747);
-const buildOutputText = __nccwpck_require__(3683);
+const createOrUpdateComment = __nccwpck_require__(478);
+const getAssetSizes = __nccwpck_require__(9028);
 
 module.exports = async function run() {
   let repoToken = getInput('repo_token', { required: true });
-
-  console.log(repoToken);
 
   let filePatternsStr = getInput('file_patterns', { required: true });
   let buildCommand = getInput('build_command', { required: true });
@@ -30,12 +26,109 @@ module.exports = async function run() {
 
   await exec(`git checkout ${pullRequest.base.sha}`);
 
-  let mainAssets = await getAssetSizes(buildCommand, filePatterns, true);
+  let mainAssets = await getAssetSizes(buildCommand, filePatterns);
 
   await createOrUpdateComment(octokit, pullRequest, prAssets, mainAssets);
 };
 
-async function createOrUpdateComment(
+
+/***/ }),
+
+/***/ 3683:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+const prettyBytes = __nccwpck_require__(5168);
+
+function markdownTable(data) {
+  let table = `File(s) | Gzipped | Raw | Gzipped +/-
+--- | --- | --- | ---`;
+
+  data.forEach((record) => {
+    table += `\n${[
+      record.filePattern,
+      prettyBytes(record.gzip),
+      prettyBytes(record.raw),
+      prettyBytes(record.gzipDiff, { signed: true }),
+    ].join(' | ')}`;
+  });
+
+  return table;
+}
+
+function markdownDetails(data, button = 'Show breakdown per file') {
+  return `<details>
+  <summary>
+    ${button}
+  </summary>
+
+${data}
+</details>`;
+}
+
+function getDiffs(prAssets, mainAssets) {
+  let filePatterns = Array.from(
+    new Set(
+      prAssets
+        .map((prAsset) => prAsset.filePattern)
+        .concat(mainAssets.map((mainAsset) => mainAsset.filePattern))
+    )
+  );
+
+  return filePatterns.map((filePattern) => {
+    let prAsset = prAssets.find(
+      (prAsset) => prAsset.filePattern === filePattern
+    );
+    let mainAsset = mainAssets.find(
+      (mainAsset) => mainAsset.filePattern === filePattern
+    );
+
+    return {
+      filePattern,
+      gzip: prAsset ? prAsset.gzip : 0,
+      raw: prAsset ? prAsset.raw : 0,
+      gzipDiff: (prAsset ? prAsset.gzip : 0) - (mainAsset ? mainAsset.gzip : 0),
+      filesDiff:
+        prAsset && prAsset.files
+          ? getDiffs(prAsset.files, mainAsset ? mainAsset.files : [])
+          : undefined,
+    };
+  });
+}
+
+module.exports = function buildOutputText(prAssets, mainAssets) {
+  let diffs = getDiffs(prAssets, mainAssets);
+
+  let outputParts = [];
+  diffs.forEach((diff) => {
+    if (diff.gzipDiff > 100) {
+      // larger
+      outputParts.push(`🚨 \`${diff.filePattern}\` got bigger:`);
+    } else if (diff.gzipDiff < -100) {
+      // smaller
+      outputParts.push(`🎉 \`${diff.filePattern}\` got smaller:`);
+    } else {
+      // same size
+      outputParts.push(`🤷 \`${diff.filePattern}\` stayed the same size:`);
+    }
+
+    outputParts.push(markdownTable([diff]));
+    outputParts.push(markdownDetails(markdownTable(diff.filesDiff)));
+    outputParts.push('');
+  });
+
+  return outputParts.join('\n');
+};
+
+
+/***/ }),
+
+/***/ 478:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+const buildOutputText = __nccwpck_require__(3683);
+const { context } = __nccwpck_require__(5438);
+
+module.exports = async function createOrUpdateComment(
   octokit,
   pullRequest,
   prAssets,
@@ -87,9 +180,20 @@ See https://github.community/t5/GitHub-Actions/Actions-not-working-correctly-for
 
 ${body}`);
   }
-}
+};
 
-async function getAssetSizes(buildCommand, filePatterns, randomize = false) {
+
+/***/ }),
+
+/***/ 9028:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+const { exec } = __nccwpck_require__(1514);
+const { sync: glob } = __nccwpck_require__(1957);
+const getGzipSize = __nccwpck_require__(9938);
+const fs = __nccwpck_require__(5747);
+
+module.exports = async function getAssetSizes(buildCommand, filePatterns) {
   await exec(buildCommand);
 
   let records = [];
@@ -105,15 +209,11 @@ async function getAssetSizes(buildCommand, filePatterns, randomize = false) {
     };
 
     for (let file of files) {
-      let factor = randomize ? 0.5 + Math.random() : 1;
-
       let gzip = await getGzipSize.file(file);
-      gzip *= factor;
       record.gzip += gzip;
 
       let stat = fs.statSync(file);
       let raw = stat.size;
-      raw *= factor;
       record.raw += raw;
 
       record.files.push({ filePattern: file, raw, gzip });
@@ -123,85 +223,6 @@ async function getAssetSizes(buildCommand, filePatterns, randomize = false) {
   }
 
   return records;
-}
-
-
-/***/ }),
-
-/***/ 3683:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-const prettyBytes = __nccwpck_require__(5168);
-
-function markdownTable(data) {
-  let table = `File(s) | Gzipped | Raw | Gzipped +/-
---- | --- | --- | ---`;
-
-  data.forEach((record) => {
-    table += `\n${[
-      record.filePattern,
-      prettyBytes(record.gzip),
-      prettyBytes(record.raw),
-      prettyBytes(record.gzipDiff, { signed: true }),
-    ].join(' | ')}`;
-  });
-
-  return table;
-}
-
-function markdownDetails(data, button = 'Show breakdown per file') {
-  return `<details>
-  <summary>
-    ${button}
-  </summary>
-
-${data}
-</details>`;
-}
-
-function getDiffs(prAssets, mainAssets) {
-  return prAssets.map((prAsset) => {
-    let mainAsset = mainAssets.find(
-      (mainAsset) => mainAsset.filePattern === prAsset.filePattern
-    );
-
-    return {
-      filePattern: prAsset.filePattern,
-      gzip: prAsset.gzip,
-      raw: prAsset.raw,
-      gzipDiff: prAsset.gzip - mainAsset.gzip,
-      rawDiff: prAsset.raw - mainAsset.raw,
-      filesDiff: prAsset.files
-        ? getDiffs(prAsset.files, mainAsset.files)
-        : undefined,
-    };
-  });
-}
-
-module.exports = function buildOutputText(prAssets, mainAssets) {
-  let diffs = getDiffs(prAssets, mainAssets);
-
-  console.log(diffs);
-
-  let outputParts = [];
-  diffs.forEach((diff) => {
-    if (diff.gzipDiff > 100) {
-      // larger
-      outputParts.push(`🚨 \`${diff.filePattern}\` got bigger:`);
-    } else if (diff.gzipDiff < -100) {
-      // smaller
-      outputParts.push(`🎉 \`${diff.filePattern}\` got smaller:`);
-    } else {
-      // same size
-      outputParts.push(`🤷 \`${diff.filePattern}\` stayed the same size:`);
-    }
-
-    outputParts.push(markdownTable([diff]));
-    outputParts.push(markdownDetails(markdownTable(diff.filesDiff)));
-    outputParts.push('');
-  });
-
-  return outputParts.join('\n');
 };
 
 
