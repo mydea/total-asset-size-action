@@ -1,0 +1,21 @@
+name: "Total Asset Size"
+description: "Calculate & compare the asset sizes of PR builds."
+author: "Francesco Novy"
+branding:
+  icon: "bar-chart-2"
+  color: "orange"
+inputs:
+  repo_token:
+    description: "The GITHUB_TOKEN secret"
+    required: true
+  file_patterns:
+    description: "A JSON stringified array of file glob patterns to fetch."
+    required: true
+    default: '["dist/**/*.js", "dist/**/*.css"]'
+  build_command:
+    description: "The command to run to build the app"
+    required: true
+    default: "yarn build"
+runs:
+  using: "node12"
+  main: "dist/index.js"
