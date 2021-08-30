@@ -100,10 +100,10 @@ module.exports = function buildOutputText(prAssets, mainAssets) {
 
   let outputParts = [];
   diffs.forEach((diff) => {
-    if (diff.gzipDiff > 100) {
+    if (diff.gzipDiff > 10) {
       // larger
       outputParts.push(`🚨 \`${diff.filePattern}\` got bigger:`);
-    } else if (diff.gzipDiff < -100) {
+    } else if (diff.gzipDiff < -10) {
       // smaller
       outputParts.push(`🎉 \`${diff.filePattern}\` got smaller:`);
     } else {
