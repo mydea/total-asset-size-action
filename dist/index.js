@@ -24,9 +24,15 @@ module.exports = async function run() {
   let pullRequest = await getPullRequest(context, octokit);
   let prAssets = await getAssetSizes(buildCommand, filePatterns);
 
+  console.log('Determined PR assets:');
+  console.log(prAssets);
+
   await exec(`git checkout ${pullRequest.base.sha}`);
 
   let mainAssets = await getAssetSizes(buildCommand, filePatterns);
+
+  console.log('Determined main assets:');
+  console.log(mainAssets);
 
   await createOrUpdateComment(octokit, pullRequest, prAssets, mainAssets);
 };
@@ -165,6 +171,8 @@ module.exports = async function createOrUpdateComment(
         comment_id: existingComment.id,
         body,
       });
+
+      console.log('Comment successfully updated.');
     } else {
       await octokit.rest.issues.createComment({
         owner: context.repo.owner,
@@ -172,6 +180,8 @@ module.exports = async function createOrUpdateComment(
         issue_number: pullRequest.number,
         body,
       });
+
+      console.log('Comment successfully created.');
     }
   } catch (e) {
     console.log(`Could not create a comment automatically. This could be because github does not allow writing from actions on a fork.
