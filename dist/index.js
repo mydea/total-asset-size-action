@@ -17,6 +17,8 @@ module.exports = async function run() {
   let filePatternsStr = getInput('file_patterns', { required: true });
   let buildCommand = getInput('build_command', { required: true });
 
+  console.log('DEBUG HERE!');
+
   let filePatterns = JSON.parse(filePatternsStr);
 
   let octokit = getOctokit(repoToken);
@@ -79,6 +81,10 @@ function getDiffs(prAssets, mainAssets) {
         .concat(mainAssets.map((mainAsset) => mainAsset.filePattern))
     )
   );
+
+  filePatterns.sort();
+
+  console.log(filePatterns);
 
   return filePatterns.map((filePattern) => {
     let prAsset = prAssets.find(
